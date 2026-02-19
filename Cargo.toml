@@ -10,3 +10,4 @@ categories = ["filesystem", "concurrency"]
 
 [dependencies]
 thiserror = "2"
+ignore = "0.4"
