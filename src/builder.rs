@@ -151,9 +151,10 @@ impl SearchBuilder {
         })?;
 
         // Default matcher: match everything
-        let matcher: Arc<dyn Matcher> = self.matcher
-            .map(Arc::from)
-            .unwrap_or_else(|| Arc::new(AllMatcher));
+        let matcher: Arc<dyn Matcher> = match self.matcher {
+            Some(m) => Arc::from(m),
+            None    => Arc::new(AllMatcher),
+        };
 
         // Resolve the root from the source
         // DirectorySource (in ldx) provides the root — we ask it via walk()

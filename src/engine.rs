@@ -18,7 +18,7 @@ use crate::traits::Matcher;
 ///
 /// `pub(crate)` — not part of the public API. Callers configure these
 /// via the builder methods (`.threads()`, `.max_depth()`, `.limit()`).
-pub(crate) struct WalkConfig {
+pub struct WalkConfig {
     pub threads:   usize,
     pub max_depth: Option<usize>,
     pub limit:     Option<usize>,
@@ -80,7 +80,6 @@ pub(crate) fn run(root: &PathBuf, opts: EngineOptions) -> Results {
         let limit          = opts.config.limit;
         let collect_paths  = opts.collect_paths;
         let collect_errors = opts.collect_errors;
-        let root           = root.clone();
 
         Box::new(move |res: Result<DirEntry, ignore::Error>| -> WalkState {
             // Handle traversal errors
