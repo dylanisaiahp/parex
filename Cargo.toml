@@ -11,3 +11,7 @@ categories = ["filesystem", "concurrency"]
 [dependencies]
 thiserror = "2"
 ignore = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+walkdir = "2"
