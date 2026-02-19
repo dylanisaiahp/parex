@@ -1,0 +1,12 @@
+[package]
+name = "parex"
+version = "0.1.0"
+edition = "2021"
+description = "Blazing-fast parallel search engine — generic, embeddable, zero opinions"
+license = "MIT"
+repository = "https://github.com/dylanisaiahp/parex"
+keywords = ["search", "parallel", "filesystem", "files"]
+categories = ["filesystem", "concurrency"]
+
+[dependencies]
+thiserror = "2"
