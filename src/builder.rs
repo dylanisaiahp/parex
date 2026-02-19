@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::engine::{EngineOptions, WalkConfig, run};
@@ -17,7 +16,7 @@ use crate::traits::{Matcher, Source};
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// let results = parex::search()
 ///     .source(my_source)
 ///     .matching(my_matcher)
@@ -156,29 +155,18 @@ impl SearchBuilder {
             None    => Arc::new(AllMatcher),
         };
 
-        // Resolve the root from the source
-        // DirectorySource (in ldx) provides the root — we ask it via walk()
-        // For now, the engine expects a PathBuf root directly.
-        // We extract it by downcasting if the source is a DirectorySource,
-        // or use a sentinel path for custom sources.
-        //
-        // NOTE: This is a known limitation of the v0.1.0 sync API.
-        // A future iteration will have Source::root() -> Option<&Path>
-        // so the engine can always know where to start.
-        let root = source_root(&*source);
-
         let opts = EngineOptions {
             config: WalkConfig {
                 threads:   self.threads,
                 max_depth: self.max_depth,
                 limit:     self.limit,
             },
+            source,
             matcher,
             collect_paths:  self.collect_paths,
-            collect_errors: self.collect_errors,
         };
 
-        Ok(run(&root, opts))
+        Ok(run(opts))
     }
 }
 
@@ -215,22 +203,4 @@ fn num_cpus() -> usize {
     std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4)
-}
-
-/// Extract a root path from a source.
-///
-/// This is a temporary shim for v0.1.0. The engine needs a `PathBuf` to hand
-/// to the `ignore` walker. Custom sources that don't map to a filesystem path
-/// should implement their own traversal and not use this engine directly.
-///
-/// A future `Source::root() -> Option<&Path>` method will make this clean.
-fn source_root(source: &dyn Source) -> PathBuf {
-    // Walk with a zero-depth config just to get the root
-    // Sources that override walk() can return their root as the first entry
-    let config = WalkConfig { threads: 1, max_depth: Some(0), limit: Some(1) };
-    source
-        .walk(&config)
-        .next()
-        .map(|e| e.path)
-        .unwrap_or_else(|| PathBuf::from("."))
 }

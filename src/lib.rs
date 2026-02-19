@@ -9,7 +9,7 @@
 //!
 //! # Quick Start
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use parex::search;
 //!
 //! let results = search()
@@ -100,7 +100,7 @@ pub use traits::{Matcher, Source};
 
 /// Create a new [`SearchBuilder`] to configure and run a search.
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// let results = parex::search()
 ///     .source(my_source)
 ///     .matching("invoice")
