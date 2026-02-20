@@ -1,4 +1,5 @@
 use crate::entry::Entry;
+use crate::error::ParexError;
 
 /// A source of entries to search through.
 ///
@@ -8,7 +9,7 @@ use crate::entry::Entry;
 /// # Object Safety
 ///
 /// `Source` is object-safe. The builder stores sources as `Box<dyn Source>`,
-/// so `walk()` returns `Box<dyn Iterator<Item = Entry>>` rather than
+/// so `walk()` returns `Box<dyn Iterator<Item = Result<Entry, ParexError>>>` rather than
 /// `impl Iterator` (which would not be object-safe).
 ///
 /// # Thread Safety
@@ -16,23 +17,30 @@ use crate::entry::Entry;
 /// `Send + Sync` are required — sources are shared across threads during
 /// parallel traversal.
 ///
+/// # Error Handling
+///
+/// Recoverable errors (permission denied, unreadable directories) should be
+/// yielded as `Err(ParexError)` rather than panicking or silently skipping.
+/// The engine collects these into [`Results::errors`] when
+/// `.collect_errors(true)` is set on the builder.
+///
 /// # Example
 ///
-/// ```rust
-/// use parex::{Source, Entry, EntryKind};
+/// ```rust,ignore
+/// use parex::{Source, Entry, EntryKind, ParexError};
 /// use parex::engine::WalkConfig;
 ///
 /// struct VecSource(Vec<String>);
 ///
 /// impl Source for VecSource {
-///     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Entry>> {
-///         let entries: Vec<Entry> = self.0.iter().map(|name| Entry {
+///     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
+///         let entries = self.0.iter().map(|name| Ok(Entry {
 ///             path: name.into(),
 ///             name: name.clone(),
 ///             kind: EntryKind::File,
 ///             depth: 0,
 ///             metadata: None,
-///         }).collect();
+///         })).collect::<Vec<_>>();
 ///         Box::new(entries.into_iter())
 ///     }
 /// }
@@ -42,7 +50,10 @@ pub trait Source: Send + Sync {
     ///
     /// `config` carries traversal parameters (thread count, depth limit, limit)
     /// so sources can honour them during their own traversal logic.
-    fn walk(&self, config: &crate::engine::WalkConfig) -> Box<dyn Iterator<Item = Entry>>;
+    ///
+    /// Yield `Err` for recoverable errors — the engine collects them into
+    /// [`Results::errors`] rather than halting the search.
+    fn walk(&self, config: &crate::engine::WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>>;
 }
 
 /// Determines whether an entry is a match.

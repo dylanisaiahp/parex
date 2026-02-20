@@ -41,21 +41,21 @@
 //!
 //! Implement [`Source`] to search anything traversable:
 //!
-//! ```rust
-//! use parex::{Source, Entry, EntryKind};
+//! ```rust,ignore
+//! use parex::{Source, Entry, EntryKind, ParexError};
 //! use parex::engine::WalkConfig;
 //!
 //! struct VecSource(Vec<String>);
 //!
 //! impl Source for VecSource {
-//!     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Entry>> {
-//!         let entries: Vec<Entry> = self.0.iter().map(|name| Entry {
+//!     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
+//!         let entries = self.0.iter().map(|name| Ok(Entry {
 //!             path: name.into(),
 //!             name: name.clone(),
 //!             kind: EntryKind::File,
 //!             depth: 0,
 //!             metadata: None,
-//!         }).collect();
+//!         })).collect::<Vec<_>>();
 //!         Box::new(entries.into_iter())
 //!     }
 //! }

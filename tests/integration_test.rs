@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use parex::engine::WalkConfig;
-use parex::{search, Entry, EntryKind, Matcher, Source};
+use parex::{search, Entry, EntryKind, Matcher, ParexError, Source};
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -42,26 +42,38 @@ fn setup_test_dir() -> tempfile::TempDir {
 struct TestDirSource(PathBuf);
 
 impl Source for TestDirSource {
-    fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Entry>> {
+    fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
         let root = self.0.clone();
         let entries = walkdir::WalkDir::new(&root)
             .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path() != root)
-            .map(|e| {
-                let kind = if e.file_type().is_dir() {
-                    EntryKind::Dir
-                } else if e.file_type().is_symlink() {
-                    EntryKind::Symlink
-                } else {
-                    EntryKind::File
-                };
-                Entry {
-                    name: e.file_name().to_string_lossy().into_owned(),
-                    path: e.path().to_path_buf(),
-                    kind,
-                    depth: e.depth(),
-                    metadata: None,
+            .filter(move |e| {
+                e.as_ref().map(|e| e.path() != root).unwrap_or(true)
+            })
+            .map(|e| match e {
+                Ok(e) => {
+                    let kind = if e.file_type().is_dir() {
+                        EntryKind::Dir
+                    } else if e.file_type().is_symlink() {
+                        EntryKind::Symlink
+                    } else {
+                        EntryKind::File
+                    };
+                    Ok(Entry {
+                        name:     e.file_name().to_string_lossy().into_owned(),
+                        path:     e.path().to_path_buf(),
+                        kind,
+                        depth:    e.depth(),
+                        metadata: None,
+                    })
+                }
+                Err(e) => {
+                    let path = e.path().map(|p| p.to_path_buf()).unwrap_or_default();
+                    Err(ParexError::Io {
+                        path,
+                        source: e.into_io_error().unwrap_or_else(|| {
+                            std::io::Error::new(std::io::ErrorKind::Other, "walk error")
+                        }),
+                    })
                 }
             })
             .collect::<Vec<_>>();
@@ -166,9 +178,17 @@ fn paths_empty_when_not_collecting() {
         .run()
         .unwrap();
 
-    assert!(
-        results.paths.is_empty(),
-        "paths should be empty when collect_paths is false"
-    );
+    assert!(results.paths.is_empty(), "paths should be empty when collect_paths is false");
     assert_eq!(results.matches, 3, "matches should still be counted");
+}
+
+#[test]
+fn errors_empty_when_not_collecting() {
+    let dir = setup_test_dir();
+    let results = search()
+        .source(TestDirSource(dir.path().to_path_buf()))
+        .run()
+        .unwrap();
+
+    assert!(results.errors.is_empty(), "errors should be empty when collect_errors is false");
 }

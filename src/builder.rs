@@ -164,6 +164,7 @@ impl SearchBuilder {
             source,
             matcher,
             collect_paths:  self.collect_paths,
+            collect_errors: self.collect_errors,
         };
 
         Ok(run(opts))
