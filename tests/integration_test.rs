@@ -46,9 +46,7 @@ impl Source for TestDirSource {
         let root = self.0.clone();
         let entries = walkdir::WalkDir::new(&root)
             .into_iter()
-            .filter(move |e| {
-                e.as_ref().map(|e| e.path() != root).unwrap_or(true)
-            })
+            .filter(move |e| e.as_ref().map(|e| e.path() != root).unwrap_or(true))
             .map(|e| match e {
                 Ok(e) => {
                     let kind = if e.file_type().is_dir() {
@@ -59,10 +57,10 @@ impl Source for TestDirSource {
                         EntryKind::File
                     };
                     Ok(Entry {
-                        name:     e.file_name().to_string_lossy().into_owned(),
-                        path:     e.path().to_path_buf(),
+                        name: e.file_name().to_string_lossy().into_owned(),
+                        path: e.path().to_path_buf(),
                         kind,
-                        depth:    e.depth(),
+                        depth: e.depth(),
                         metadata: None,
                     })
                 }
@@ -178,7 +176,10 @@ fn paths_empty_when_not_collecting() {
         .run()
         .unwrap();
 
-    assert!(results.paths.is_empty(), "paths should be empty when collect_paths is false");
+    assert!(
+        results.paths.is_empty(),
+        "paths should be empty when collect_paths is false"
+    );
     assert_eq!(results.matches, 3, "matches should still be counted");
 }
 
@@ -190,5 +191,8 @@ fn errors_empty_when_not_collecting() {
         .run()
         .unwrap();
 
-    assert!(results.errors.is_empty(), "errors should be empty when collect_errors is false");
+    assert!(
+        results.errors.is_empty(),
+        "errors should be empty when collect_errors is false"
+    );
 }

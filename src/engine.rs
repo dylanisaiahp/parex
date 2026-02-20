@@ -16,9 +16,9 @@ use crate::traits::Matcher;
 /// Sources receive this so they can honour depth limits, thread counts,
 /// and result limits during their own traversal logic.
 pub struct WalkConfig {
-    pub threads:   usize,
+    pub threads: usize,
     pub max_depth: Option<usize>,
-    pub limit:     Option<usize>,
+    pub limit: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------
@@ -27,10 +27,10 @@ pub struct WalkConfig {
 
 /// Internal options passed from the builder to `run()`.
 pub(crate) struct EngineOptions {
-    pub config:         WalkConfig,
-    pub source:         Box<dyn crate::traits::Source>,
-    pub matcher:        Arc<dyn Matcher>,
-    pub collect_paths:  bool,
+    pub config: WalkConfig,
+    pub source: Box<dyn crate::traits::Source>,
+    pub matcher: Arc<dyn Matcher>,
+    pub collect_paths: bool,
     pub collect_errors: bool,
 }
 
@@ -49,16 +49,16 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
 
     let entries = opts.source.walk(&opts.config);
 
-    let matches        = Arc::new(AtomicUsize::new(0));
-    let files          = Arc::new(AtomicUsize::new(0));
-    let dirs           = Arc::new(AtomicUsize::new(0));
-    let paths          = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
-    let errors         = Arc::new(Mutex::new(Vec::<ParexError>::new()));
+    let matches = Arc::new(AtomicUsize::new(0));
+    let files = Arc::new(AtomicUsize::new(0));
+    let dirs = Arc::new(AtomicUsize::new(0));
+    let paths = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+    let errors = Arc::new(Mutex::new(Vec::<ParexError>::new()));
 
-    let limit          = opts.config.limit;
-    let collect_paths  = opts.collect_paths;
+    let limit = opts.config.limit;
+    let collect_paths = opts.collect_paths;
     let collect_errors = opts.collect_errors;
-    let matcher        = &opts.matcher;
+    let matcher = &opts.matcher;
 
     for item in entries {
         // Enforce limit before processing next item
@@ -83,8 +83,12 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
 
         // Count by kind
         match entry.kind {
-            crate::entry::EntryKind::Dir  => { dirs.fetch_add(1, Ordering::Relaxed); }
-            crate::entry::EntryKind::File => { files.fetch_add(1, Ordering::Relaxed); }
+            crate::entry::EntryKind::Dir => {
+                dirs.fetch_add(1, Ordering::Relaxed);
+            }
+            crate::entry::EntryKind::File => {
+                files.fetch_add(1, Ordering::Relaxed);
+            }
             _ => {}
         }
 
@@ -108,15 +112,21 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
     }
 
     let duration = start.elapsed();
-    let matches  = matches.load(Ordering::Relaxed);
-    let files    = files.load(Ordering::Relaxed);
-    let dirs     = dirs.load(Ordering::Relaxed);
-    let paths    = Arc::try_unwrap(paths).unwrap_or_default().into_inner().unwrap_or_default();
-    let errors   = Arc::try_unwrap(errors).unwrap_or_default().into_inner().unwrap_or_default();
+    let matches = matches.load(Ordering::Relaxed);
+    let files = files.load(Ordering::Relaxed);
+    let dirs = dirs.load(Ordering::Relaxed);
+    let paths = Arc::try_unwrap(paths)
+        .unwrap_or_default()
+        .into_inner()
+        .unwrap_or_default();
+    let errors = Arc::try_unwrap(errors)
+        .unwrap_or_default()
+        .into_inner()
+        .unwrap_or_default();
 
     let matches = match limit {
         Some(lim) => matches.min(lim),
-        None      => matches,
+        None => matches,
     };
 
     Results {
