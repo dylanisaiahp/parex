@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::engine::{EngineOptions, WalkConfig, run};
+use crate::engine::{run, EngineOptions, WalkConfig};
 use crate::error::ParexError;
 use crate::results::Results;
 use crate::traits::{Matcher, Source};
@@ -16,34 +16,51 @@ use crate::traits::{Matcher, Source};
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
+/// use parex::{Source, Entry, EntryKind, ParexError};
+/// use parex::engine::WalkConfig;
+///
+/// struct NameSource(Vec<&'static str>);
+/// impl Source for NameSource {
+///     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
+///         let entries = self.0.iter().map(|n| Ok(Entry {
+///             path: n.into(), name: n.to_string(),
+///             kind: EntryKind::File, depth: 0, metadata: None,
+///         })).collect::<Vec<_>>();
+///         Box::new(entries.into_iter())
+///     }
+/// }
+///
 /// let results = parex::search()
-///     .source(my_source)
-///     .matching(my_matcher)
+///     .source(NameSource(vec!["invoice.txt", "report.txt", "notes.md"]))
+///     .matching("invoice")
 ///     .limit(10)
-///     .threads(8)
+///     .threads(4)
 ///     .collect_paths(true)
-///     .run()?;
+///     .run()
+///     .unwrap();
+///
+/// assert_eq!(results.matches, 1);
 /// ```
 pub struct SearchBuilder {
-    source:         Option<Box<dyn Source>>,
-    matcher:        Option<Box<dyn Matcher>>,
-    limit:          Option<usize>,
-    threads:        usize,
-    max_depth:      Option<usize>,
-    collect_paths:  bool,
+    source: Option<Box<dyn Source>>,
+    matcher: Option<Box<dyn Matcher>>,
+    limit: Option<usize>,
+    threads: usize,
+    max_depth: Option<usize>,
+    collect_paths: bool,
     collect_errors: bool,
 }
 
 impl Default for SearchBuilder {
     fn default() -> Self {
         Self {
-            source:         None,
-            matcher:        None,
-            limit:          None,
-            threads:        num_cpus(),
-            max_depth:      None,
-            collect_paths:  false,
+            source: None,
+            matcher: None,
+            limit: None,
+            threads: num_cpus(),
+            max_depth: None,
+            collect_paths: false,
             collect_errors: false,
         }
     }
@@ -145,25 +162,25 @@ impl SearchBuilder {
     /// traversal are collected into [`Results::errors`] when
     /// `.collect_errors(true)` is set.
     pub fn run(self) -> Result<Results, ParexError> {
-        let source = self.source.ok_or_else(|| {
-            ParexError::InvalidSource("no source provided".into())
-        })?;
+        let source = self
+            .source
+            .ok_or_else(|| ParexError::InvalidSource("no source provided".into()))?;
 
         // Default matcher: match everything
         let matcher: Arc<dyn Matcher> = match self.matcher {
             Some(m) => Arc::from(m),
-            None    => Arc::new(AllMatcher),
+            None => Arc::new(AllMatcher),
         };
 
         let opts = EngineOptions {
             config: WalkConfig {
-                threads:   self.threads,
+                threads: self.threads,
                 max_depth: self.max_depth,
-                limit:     self.limit,
+                limit: self.limit,
             },
             source,
             matcher,
-            collect_paths:  self.collect_paths,
+            collect_paths: self.collect_paths,
             collect_errors: self.collect_errors,
         };
 

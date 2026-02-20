@@ -26,7 +26,7 @@ use crate::error::ParexError;
 ///
 /// # Example
 ///
-/// ```rust,ignore
+/// ```rust
 /// use parex::{Source, Entry, EntryKind, ParexError};
 /// use parex::engine::WalkConfig;
 ///
@@ -53,7 +53,10 @@ pub trait Source: Send + Sync {
     ///
     /// Yield `Err` for recoverable errors — the engine collects them into
     /// [`Results::errors`] rather than halting the search.
-    fn walk(&self, config: &crate::engine::WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>>;
+    fn walk(
+        &self,
+        config: &crate::engine::WalkConfig,
+    ) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>>;
 }
 
 /// Determines whether an entry is a match.

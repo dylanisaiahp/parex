@@ -9,39 +9,45 @@
 //!
 //! # Quick Start
 //!
-//! ```rust,ignore
-//! use parex::search;
+//! ```rust
+//! use parex::{Source, Entry, EntryKind, ParexError, Matcher};
+//! use parex::engine::WalkConfig;
 //!
-//! let results = search()
-//!     .source(my_source)
+//! // A minimal in-memory source for demonstration
+//! struct NameSource(Vec<&'static str>);
+//!
+//! impl Source for NameSource {
+//!     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
+//!         let entries = self.0.iter().map(|name| Ok(Entry {
+//!             path:     name.into(),
+//!             name:     name.to_string(),
+//!             kind:     EntryKind::File,
+//!             depth:    0,
+//!             metadata: None,
+//!         })).collect::<Vec<_>>();
+//!         Box::new(entries.into_iter())
+//!     }
+//! }
+//!
+//! let results = parex::search()
+//!     .source(NameSource(vec!["invoice_jan.txt", "invoice_feb.txt", "report.txt"]))
 //!     .matching("invoice")
-//!     .limit(10)
-//!     .threads(8)
 //!     .collect_paths(true)
-//!     .collect_errors(true)
 //!     .run()
 //!     .unwrap();
 //!
+//! assert_eq!(results.matches, 2);
 //! println!("Found {} matches in {:.3}s",
 //!     results.matches,
 //!     results.stats.duration.as_secs_f64()
 //! );
-//!
-//! for err in &results.errors {
-//!     if err.is_recoverable() {
-//!         eprintln!("⚠ Skipped: {:?} ({})",
-//!             err.path().unwrap_or(&std::path::PathBuf::new()),
-//!             err
-//!         );
-//!     }
-//! }
 //! ```
 //!
 //! # Custom Sources and Matchers
 //!
 //! Implement [`Source`] to search anything traversable:
 //!
-//! ```rust,ignore
+//! ```rust
 //! use parex::{Source, Entry, EntryKind, ParexError};
 //! use parex::engine::WalkConfig;
 //!
@@ -50,10 +56,10 @@
 //! impl Source for VecSource {
 //!     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
 //!         let entries = self.0.iter().map(|name| Ok(Entry {
-//!             path: name.into(),
-//!             name: name.clone(),
-//!             kind: EntryKind::File,
-//!             depth: 0,
+//!             path:     name.into(),
+//!             name:     name.clone(),
+//!             kind:     EntryKind::File,
+//!             depth:    0,
 //!             metadata: None,
 //!         })).collect::<Vec<_>>();
 //!         Box::new(entries.into_iter())
@@ -100,12 +106,31 @@ pub use traits::{Matcher, Source};
 
 /// Create a new [`SearchBuilder`] to configure and run a search.
 ///
-/// ```rust,ignore
+/// # Example
+///
+/// ```rust
+/// use parex::{Source, Entry, EntryKind, ParexError};
+/// use parex::engine::WalkConfig;
+///
+/// struct NameSource(Vec<&'static str>);
+///
+/// impl Source for NameSource {
+///     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
+///         let entries = self.0.iter().map(|name| Ok(Entry {
+///             path: name.into(), name: name.to_string(),
+///             kind: EntryKind::File, depth: 0, metadata: None,
+///         })).collect::<Vec<_>>();
+///         Box::new(entries.into_iter())
+///     }
+/// }
+///
 /// let results = parex::search()
-///     .source(my_source)
+///     .source(NameSource(vec!["invoice.txt", "report.txt"]))
 ///     .matching("invoice")
 ///     .run()
 ///     .unwrap();
+///
+/// assert_eq!(results.matches, 1);
 /// ```
 pub fn search() -> SearchBuilder {
     SearchBuilder::default()
