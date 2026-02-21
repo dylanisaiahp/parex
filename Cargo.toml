@@ -1,6 +1,6 @@
 [package]
 name = "parex"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Blazing-fast parallel search engine — generic, embeddable, zero opinions"
 license = "MIT"
@@ -10,7 +10,6 @@ categories = ["filesystem", "concurrency"]
 
 [dependencies]
 thiserror = "2"
-ignore = "0.4"
 
 [dev-dependencies]
 tempfile = "3"

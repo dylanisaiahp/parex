@@ -2,49 +2,51 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ParexError {
     // Traversal
-    #[error("permission denied")]
+    #[error("permission denied: {0}")]
     PermissionDenied(PathBuf),
 
-    #[error("path not found")]
+    #[error("path not found: {0}")]
     NotFound(PathBuf),
 
-    #[error("invalid source")]
+    #[error("invalid source: {0}")]
     InvalidSource(PathBuf),
 
-    #[error("symlink loop")]
+    #[error("symlink loop: {0}")]
     SymlinkLoop(PathBuf),
 
     // Config
-    #[error("invalid pattern")]
+    #[error("invalid pattern: {0}")]
     InvalidPattern(String),
 
-    #[error("invalid thread count")]
+    #[error("invalid thread count: {0}")]
     InvalidThreadCount(usize),
 
     // Runtime
-    #[error("thread pool failure")]
+    #[error("thread pool failure: {0}")]
     ThreadPool(String),
 
-    #[error("IO error")]
+    #[error("IO error at {path}")]
     Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
 
-    // Third-party extensibility
-    #[error("source error")]
-    Source(String),
+    // Third-party extensibility — Box<dyn Error> preserves original error type
+    // and enables proper chaining via thiserror's #[source]
+    #[error("source error: {0}")]
+    Source(#[source] Box<dyn std::error::Error + Send + Sync>),
 
-    #[error("matcher error")]
-    Matcher(String),
+    #[error("matcher error: {0}")]
+    Matcher(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl ParexError {
     /// The path this error occurred at, if applicable.
-    /// Callers use this to present "Skipped: <path>" without pattern matching on variants.
+    /// Callers can present "Skipped: <path>" without pattern matching on variants.
     pub fn path(&self) -> Option<&PathBuf> {
         match self {
             Self::PermissionDenied(p)
@@ -58,14 +60,38 @@ impl ParexError {
 
     /// Whether the search can continue after this error.
     ///
-    /// Recoverable errors (permission denied, symlink loops, IO) can be collected
-    /// and surfaced after the search completes — the walk keeps going.
+    /// Recoverable errors (permission denied, not found, symlink loops, IO)
+    /// are collected and surfaced after the search completes — the walk keeps going.
     ///
     /// Fatal errors (invalid source, thread pool failure) should halt immediately.
     pub fn is_recoverable(&self) -> bool {
         matches!(
             self,
-            Self::PermissionDenied(_) | Self::SymlinkLoop(_) | Self::Io { .. }
+            Self::PermissionDenied(_)
+                | Self::NotFound(_)
+                | Self::SymlinkLoop(_)
+                | Self::Io { .. }
         )
+    }
+
+    /// Whether this error should halt the search immediately.
+    ///
+    /// Inverse of [`is_recoverable`](Self::is_recoverable).
+    pub fn is_fatal(&self) -> bool {
+        !self.is_recoverable()
+    }
+
+    /// Convenience constructor for source errors from third-party types.
+    ///
+    /// Prefer this over `ParexError::Source(Box::new(e))` for cleaner call sites.
+    pub fn source_err(e: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self::Source(Box::new(e))
+    }
+
+    /// Convenience constructor for matcher errors from third-party types.
+    ///
+    /// Prefer this over `ParexError::Matcher(Box::new(e))` for cleaner call sites.
+    pub fn matcher_err(e: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self::Matcher(Box::new(e))
     }
 }

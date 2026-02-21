@@ -48,7 +48,7 @@ use crate::error::ParexError;
 pub trait Source: Send + Sync {
     /// Traverse the source and yield entries.
     ///
-    /// `config` carries traversal parameters (thread count, depth limit, limit)
+    /// `config` carries traversal parameters (thread count, depth limit)
     /// so sources can honour them during their own traversal logic.
     ///
     /// Yield `Err` for recoverable errors — the engine collects them into

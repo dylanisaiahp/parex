@@ -18,7 +18,7 @@ use crate::traits::Matcher;
 pub struct WalkConfig {
     pub threads: usize,
     pub max_depth: Option<usize>,
-    pub limit: Option<usize>,
+    pub(crate) limit: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------
