@@ -4,7 +4,7 @@ Blazing-fast parallel search engine — generic, embeddable, zero opinions.
 
 parex is a Rust library that owns the parallel walk engine, the trait contracts, and the error type. It does **not** own filesystem logic, output formatting, or built-in matchers — those belong to the caller.
 
-Built to power [ldx](https://github.com/dylanisaiahp/localdex).
+Built to power [ldx](https://github.com/dylanisaiahp/localdex) — a parallel file search CLI hitting **1.4M+ entries/s** on consumer hardware.
 
 ---
 
@@ -12,16 +12,22 @@ Built to power [ldx](https://github.com/dylanisaiahp/localdex).
 
 - Parallel traversal via a clean `Source` trait — search files, databases, memory, anything
 - Custom matching via a `Matcher` trait — substring, regex, fuzzy, metadata, ML scoring
-- Typed error handling with `is_recoverable()` — callers decide what to skip vs halt
+- Typed error handling with `is_recoverable()` / `is_fatal()` — callers decide what to skip vs halt
 - Opt-in path and error collection — zero allocation overhead when unused
+- Results are explicitly unordered — parallel traversal does not guarantee output order
 - `#![forbid(unsafe_code)]`
 
-## Quick Start
+---
 
-```toml
-[dependencies]
-parex = "0.1"
+## Install
+
+```bash
+cargo add parex
 ```
+
+---
+
+## Quick Start
 
 Implement `Source` for whatever you want to search:
 
@@ -77,6 +83,8 @@ for err in &results.errors {
 }
 ```
 
+---
+
 ## Custom Matchers
 
 ```rust
@@ -100,6 +108,8 @@ let results = parex::search()
     .run()?;
 ```
 
+---
+
 ## Builder API
 
 | Method | Description |
@@ -113,6 +123,8 @@ let results = parex::search()
 | `.collect_paths(bool)` | Collect matched paths into `Results::paths` |
 | `.collect_errors(bool)` | Collect recoverable errors into `Results::errors` |
 
+---
+
 ## Error Handling
 
 ```rust
@@ -121,16 +133,25 @@ for err in &results.errors {
         eprintln!("Error at: {}", path.display());
     }
     if err.is_recoverable() {
-        // permission denied, symlink loop — safe to skip
+        // permission denied, not found, symlink loop — safe to skip
+    }
+    if err.is_fatal() {
+        // thread pool failure, invalid source — halt immediately
     }
 }
 ```
+
+---
 
 ## Design
 
 parex owns the walk engine, trait contracts, error type, and builder API. It does not own filesystem logic, output formatting, or concrete matchers — those live in the tool built on top.
 
-See [`PAREX_DESIGN.md`](PAREX_DESIGN.md) for the full architecture document.
+`Source` and `Matcher` are the extension points. A company wanting to search a database, an API, or a pre-built index just implements `Source` — the engine handles threading, result collection, and early exit transparently.
+
+See [DOCS.md](DOCS.md) for the full architecture guide, custom source examples, and embedding parex in your own project.
+
+---
 
 ## License
 
