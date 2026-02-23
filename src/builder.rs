@@ -24,7 +24,7 @@ use crate::traits::{Matcher, Source};
 /// impl Source for NameSource {
 ///     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
 ///         let entries = self.0.iter().map(|n| Ok(Entry {
-///             path: n.into(), name: n.to_string(),
+///             path: n.into(),
 ///             kind: EntryKind::File, depth: 0, metadata: None,
 ///         })).collect::<Vec<_>>();
 ///         Box::new(entries.into_iter())
@@ -43,24 +43,24 @@ use crate::traits::{Matcher, Source};
 /// assert_eq!(results.matches, 1);
 /// ```
 pub struct SearchBuilder {
-    source: Option<Box<dyn Source>>,
-    matcher: Option<Box<dyn Matcher>>,
-    limit: Option<usize>,
-    threads: usize,
-    max_depth: Option<usize>,
-    collect_paths: bool,
+    source:         Option<Box<dyn Source>>,
+    matcher:        Option<Box<dyn Matcher>>,
+    limit:          Option<usize>,
+    threads:        usize,
+    max_depth:      Option<usize>,
+    collect_paths:  bool,
     collect_errors: bool,
 }
 
 impl Default for SearchBuilder {
     fn default() -> Self {
         Self {
-            source: None,
-            matcher: None,
-            limit: None,
-            threads: num_cpus(),
-            max_depth: None,
-            collect_paths: false,
+            source:         None,
+            matcher:        None,
+            limit:          None,
+            threads:        num_cpus(),
+            max_depth:      None,
+            collect_paths:  false,
             collect_errors: false,
         }
     }
@@ -99,7 +99,7 @@ impl SearchBuilder {
     /// For custom matching logic, use `.with_matcher()` instead.
     pub fn matching(mut self, pattern: impl Into<String>) -> Self {
         self.matcher = Some(Box::new(SubstringMatcher {
-            pattern: pattern.into().to_lowercase(),
+            pattern: pattern.into().to_lowercase().into_bytes(),
         }));
         self
     }
@@ -107,9 +107,6 @@ impl SearchBuilder {
     // ── Options ───────────────────────────────────────────────────────────
 
     /// Stop after `n` matches.
-    ///
-    /// The actual match count may be slightly higher under concurrency —
-    /// parex clamps the reported count to this limit in [`Results`].
     pub fn limit(mut self, n: usize) -> Self {
         self.limit = Some(n);
         self
@@ -117,15 +114,14 @@ impl SearchBuilder {
 
     /// Number of threads to use for parallel traversal.
     ///
-    /// Defaults to the number of logical CPU cores. Values exceeding the
-    /// available core count are accepted but won't improve performance.
+    /// Defaults to the number of logical CPU cores.
     pub fn threads(mut self, n: usize) -> Self {
         self.threads = n;
         self
     }
 
-    /// Maximum traversal depth. `0` means the root only, `1` means one
-    /// level of children, and so on. Unlimited by default.
+    /// Maximum traversal depth. `0` means root only, `1` means one level
+    /// of children, and so on. Unlimited by default.
     pub fn max_depth(mut self, d: usize) -> Self {
         self.max_depth = Some(d);
         self
@@ -152,8 +148,7 @@ impl SearchBuilder {
 
     /// Execute the search and return results.
     ///
-    /// Blocks until the search completes. For streaming results or cancellation
-    /// support, see the async API (coming in a future release).
+    /// Blocks until the search completes.
     ///
     /// # Errors
     ///
@@ -166,21 +161,20 @@ impl SearchBuilder {
             .source
             .ok_or_else(|| ParexError::InvalidSource("no source provided".into()))?;
 
-        // Default matcher: match everything
         let matcher: Arc<dyn Matcher> = match self.matcher {
             Some(m) => Arc::from(m),
-            None => Arc::new(AllMatcher),
+            None    => Arc::new(AllMatcher),
         };
 
         let opts = EngineOptions {
             config: WalkConfig {
-                threads: self.threads,
+                threads:   self.threads,
                 max_depth: self.max_depth,
-                limit: self.limit,
+                limit:     self.limit,
             },
             source,
             matcher,
-            collect_paths: self.collect_paths,
+            collect_paths:  self.collect_paths,
             collect_errors: self.collect_errors,
         };
 
@@ -189,17 +183,38 @@ impl SearchBuilder {
 }
 
 // ---------------------------------------------------------------------------
-// Built-in matchers (parex ships these as conveniences)
+// Built-in matchers
 // ---------------------------------------------------------------------------
 
-/// Matches entries whose name contains `pattern` (case-insensitive).
+/// Case-insensitive substring matcher — zero allocation per entry.
+///
+/// Pattern is pre-lowercased at construction time. Matching uses a byte-level
+/// sliding window with `to_ascii_lowercase()` per byte — no heap allocation
+/// in the hot path.
 struct SubstringMatcher {
-    pattern: String,
+    pattern: Vec<u8>,
 }
 
 impl Matcher for SubstringMatcher {
     fn is_match(&self, entry: &crate::entry::Entry) -> bool {
-        entry.name.to_lowercase().contains(&self.pattern)
+        if self.pattern.is_empty() {
+            return true;
+        }
+
+        let name = entry.path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+
+        let name  = name.as_bytes();
+        let pat   = &self.pattern;
+
+        if pat.len() > name.len() {
+            return false;
+        }
+
+        name.windows(pat.len())
+            .any(|w| w.iter().zip(pat.iter()).all(|(a, b)| a.to_ascii_lowercase() == *b))
     }
 }
 
@@ -216,7 +231,6 @@ impl Matcher for AllMatcher {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Get the logical CPU count, with a safe fallback.
 fn num_cpus() -> usize {
     std::thread::available_parallelism()
         .map(|n| n.get())

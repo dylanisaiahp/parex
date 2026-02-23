@@ -35,10 +35,9 @@ use crate::error::ParexError;
 /// impl Source for VecSource {
 ///     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
 ///         let entries = self.0.iter().map(|name| Ok(Entry {
-///             path: name.into(),
-///             name: name.clone(),
-///             kind: EntryKind::File,
-///             depth: 0,
+///             path:     name.into(),
+///             kind:     EntryKind::File,
+///             depth:    0,
 ///             metadata: None,
 ///         })).collect::<Vec<_>>();
 ///         Box::new(entries.into_iter())

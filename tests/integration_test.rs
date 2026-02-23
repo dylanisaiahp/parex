@@ -57,7 +57,6 @@ impl Source for TestDirSource {
                         EntryKind::File
                     };
                     Ok(Entry {
-                        name: e.file_name().to_string_lossy().into_owned(),
                         path: e.path().to_path_buf(),
                         kind,
                         depth: e.depth(),

@@ -20,7 +20,6 @@
 //!     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
 //!         let entries = self.0.iter().map(|name| Ok(Entry {
 //!             path:     name.into(),
-//!             name:     name.to_string(),
 //!             kind:     EntryKind::File,
 //!             depth:    0,
 //!             metadata: None,
@@ -57,7 +56,6 @@
 //!     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
 //!         let entries = self.0.iter().map(|name| Ok(Entry {
 //!             path:     name.into(),
-//!             name:     name.clone(),
 //!             kind:     EntryKind::File,
 //!             depth:    0,
 //!             metadata: None,
@@ -117,7 +115,7 @@ pub use traits::{Matcher, Source};
 /// impl Source for NameSource {
 ///     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
 ///         let entries = self.0.iter().map(|name| Ok(Entry {
-///             path: name.into(), name: name.to_string(),
+///             path: name.into(),
 ///             kind: EntryKind::File, depth: 0, metadata: None,
 ///         })).collect::<Vec<_>>();
 ///         Box::new(entries.into_iter())

@@ -1,6 +1,5 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::error::ParexError;
@@ -44,26 +43,38 @@ pub(crate) struct EngineOptions {
 /// `Ok` entries are matched and collected. `Err` entries are counted as
 /// recoverable errors and stored in `Results::errors` when
 /// `collect_errors` is enabled.
+///
+/// Uses plain locals instead of `Arc<Mutex>` / `Arc<AtomicUsize>` — the
+/// engine is single-consumer, so shared-state primitives add overhead with
+/// no benefit.
 pub(crate) fn run(opts: EngineOptions) -> Results {
     let start = Instant::now();
 
     let entries = opts.source.walk(&opts.config);
 
-    let matches = Arc::new(AtomicUsize::new(0));
-    let files = Arc::new(AtomicUsize::new(0));
-    let dirs = Arc::new(AtomicUsize::new(0));
-    let paths = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
-    let errors = Arc::new(Mutex::new(Vec::<ParexError>::new()));
-
-    let limit = opts.config.limit;
+    let limit         = opts.config.limit;
     let collect_paths = opts.collect_paths;
     let collect_errors = opts.collect_errors;
-    let matcher = &opts.matcher;
+    let matcher       = opts.matcher;
+
+    let mut matches = 0usize;
+    let mut files   = 0usize;
+    let mut dirs    = 0usize;
+    let mut paths: Vec<PathBuf> = if collect_paths {
+        Vec::with_capacity(1024)
+    } else {
+        Vec::new()
+    };
+    let mut errors: Vec<ParexError> = if collect_errors {
+        Vec::with_capacity(64)
+    } else {
+        Vec::new()
+    };
 
     for item in entries {
         // Enforce limit before processing next item
         if let Some(lim) = limit {
-            if matches.load(Ordering::Relaxed) >= lim {
+            if matches >= lim {
                 break;
             }
         }
@@ -71,11 +82,8 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
         let entry = match item {
             Ok(e) => e,
             Err(err) => {
-                // Recoverable error — collect if requested, keep walking
                 if collect_errors && err.is_recoverable() {
-                    if let Ok(mut errs) = errors.lock() {
-                        errs.push(err);
-                    }
+                    errors.push(err);
                 }
                 continue;
             }
@@ -83,12 +91,8 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
 
         // Count by kind
         match entry.kind {
-            crate::entry::EntryKind::Dir => {
-                dirs.fetch_add(1, Ordering::Relaxed);
-            }
-            crate::entry::EntryKind::File => {
-                files.fetch_add(1, Ordering::Relaxed);
-            }
+            crate::entry::EntryKind::Dir  => dirs  += 1,
+            crate::entry::EntryKind::File => files += 1,
             _ => {}
         }
 
@@ -96,33 +100,20 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
             continue;
         }
 
-        let mc = matches.fetch_add(1, Ordering::Relaxed) + 1;
+        matches += 1;
 
         if collect_paths {
-            if let Ok(mut p) = paths.lock() {
-                p.push(entry.path.clone());
-            }
+            paths.push(entry.path.clone());
         }
 
         if let Some(lim) = limit {
-            if mc >= lim {
+            if matches >= lim {
                 break;
             }
         }
     }
 
     let duration = start.elapsed();
-    let matches = matches.load(Ordering::Relaxed);
-    let files = files.load(Ordering::Relaxed);
-    let dirs = dirs.load(Ordering::Relaxed);
-    let paths = Arc::try_unwrap(paths)
-        .unwrap_or_default()
-        .into_inner()
-        .unwrap_or_default();
-    let errors = Arc::try_unwrap(errors)
-        .unwrap_or_default()
-        .into_inner()
-        .unwrap_or_default();
 
     let matches = match limit {
         Some(lim) => matches.min(lim),

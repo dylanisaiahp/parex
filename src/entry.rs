@@ -2,19 +2,20 @@ use std::path::PathBuf;
 
 /// A single item produced by a [`Source`](crate::traits::Source) during traversal.
 ///
-/// Intentionally generic — not filesystem-specific. `name` and `kind` are neutral
+/// Intentionally generic — not filesystem-specific. `kind` and `depth` are neutral
 /// enough to represent directory entries, database records, API results, or anything
 /// else a custom `Source` might produce.
 ///
+/// The `name` field has been removed in v0.3.0. Callers that need the entry name
+/// can derive it from `path.file_name()`. This eliminates one `String` allocation
+/// per entry, which adds up significantly on large scans.
+///
 /// `metadata` is populated lazily — only when a matcher explicitly requests it
-/// (e.g. [`StaleMatcher`]). This avoids unnecessary `stat()` syscalls on every
+/// (e.g. a `StaleMatcher`). This avoids unnecessary `stat()` syscalls on every
 /// entry when no metadata-aware matcher is in use.
 pub struct Entry {
     /// Full path to the entry.
     pub path: PathBuf,
-
-    /// The entry's name — filename, record ID, or any identifying string.
-    pub name: String,
 
     /// What kind of entry this is.
     pub kind: EntryKind,
