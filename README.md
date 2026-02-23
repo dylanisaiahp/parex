@@ -4,7 +4,7 @@ Blazing-fast parallel search engine — generic, embeddable, zero opinions.
 
 parex is a Rust library that owns the parallel walk engine, the trait contracts, and the error type. It does **not** own filesystem logic, output formatting, or built-in matchers — those belong to the caller.
 
-Built to power [ldx](https://github.com/dylanisaiahp/localdex) — a parallel file search CLI hitting **1.4M+ entries/s** on consumer hardware.
+Built to power [ldx](https://github.com/dylanisaiahp/localdex) — a parallel file search CLI hitting **4.3M+ entries/s** on consumer hardware.
 
 ---
 
@@ -43,7 +43,6 @@ impl Source for DirSource {
             .into_iter()
             .filter_map(|e| e.ok())
             .map(|e| Ok(Entry {
-                name:     e.file_name().to_string_lossy().into_owned(),
                 path:     e.path().to_path_buf(),
                 kind:     EntryKind::File,
                 depth:    e.depth(),

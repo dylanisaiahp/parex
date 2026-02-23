@@ -43,24 +43,24 @@ use crate::traits::{Matcher, Source};
 /// assert_eq!(results.matches, 1);
 /// ```
 pub struct SearchBuilder {
-    source:         Option<Box<dyn Source>>,
-    matcher:        Option<Box<dyn Matcher>>,
-    limit:          Option<usize>,
-    threads:        usize,
-    max_depth:      Option<usize>,
-    collect_paths:  bool,
+    source: Option<Box<dyn Source>>,
+    matcher: Option<Box<dyn Matcher>>,
+    limit: Option<usize>,
+    threads: usize,
+    max_depth: Option<usize>,
+    collect_paths: bool,
     collect_errors: bool,
 }
 
 impl Default for SearchBuilder {
     fn default() -> Self {
         Self {
-            source:         None,
-            matcher:        None,
-            limit:          None,
-            threads:        num_cpus(),
-            max_depth:      None,
-            collect_paths:  false,
+            source: None,
+            matcher: None,
+            limit: None,
+            threads: num_cpus(),
+            max_depth: None,
+            collect_paths: false,
             collect_errors: false,
         }
     }
@@ -163,18 +163,18 @@ impl SearchBuilder {
 
         let matcher: Arc<dyn Matcher> = match self.matcher {
             Some(m) => Arc::from(m),
-            None    => Arc::new(AllMatcher),
+            None => Arc::new(AllMatcher),
         };
 
         let opts = EngineOptions {
             config: WalkConfig {
-                threads:   self.threads,
+                threads: self.threads,
                 max_depth: self.max_depth,
-                limit:     self.limit,
+                limit: self.limit,
             },
             source,
             matcher,
-            collect_paths:  self.collect_paths,
+            collect_paths: self.collect_paths,
             collect_errors: self.collect_errors,
         };
 
@@ -201,20 +201,24 @@ impl Matcher for SubstringMatcher {
             return true;
         }
 
-        let name = entry.path
+        let name = entry
+            .path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("");
 
-        let name  = name.as_bytes();
-        let pat   = &self.pattern;
+        let name = name.as_bytes();
+        let pat = &self.pattern;
 
         if pat.len() > name.len() {
             return false;
         }
 
-        name.windows(pat.len())
-            .any(|w| w.iter().zip(pat.iter()).all(|(a, b)| a.to_ascii_lowercase() == *b))
+        name.windows(pat.len()).any(|w| {
+            w.iter()
+                .zip(pat.iter())
+                .all(|(a, b)| a.to_ascii_lowercase() == *b)
+        })
     }
 }
 

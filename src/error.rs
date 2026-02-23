@@ -67,10 +67,7 @@ impl ParexError {
     pub fn is_recoverable(&self) -> bool {
         matches!(
             self,
-            Self::PermissionDenied(_)
-                | Self::NotFound(_)
-                | Self::SymlinkLoop(_)
-                | Self::Io { .. }
+            Self::PermissionDenied(_) | Self::NotFound(_) | Self::SymlinkLoop(_) | Self::Io { .. }
         )
     }
 

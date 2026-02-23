@@ -52,14 +52,14 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
 
     let entries = opts.source.walk(&opts.config);
 
-    let limit         = opts.config.limit;
+    let limit = opts.config.limit;
     let collect_paths = opts.collect_paths;
     let collect_errors = opts.collect_errors;
-    let matcher       = opts.matcher;
+    let matcher = opts.matcher;
 
     let mut matches = 0usize;
-    let mut files   = 0usize;
-    let mut dirs    = 0usize;
+    let mut files = 0usize;
+    let mut dirs = 0usize;
     let mut paths: Vec<PathBuf> = if collect_paths {
         Vec::with_capacity(1024)
     } else {
@@ -91,7 +91,7 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
 
         // Count by kind
         match entry.kind {
-            crate::entry::EntryKind::Dir  => dirs  += 1,
+            crate::entry::EntryKind::Dir => dirs += 1,
             crate::entry::EntryKind::File => files += 1,
             _ => {}
         }

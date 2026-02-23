@@ -104,7 +104,6 @@ Passed to `Source::walk()` so sources can honour traversal parameters. Sources a
 ```rust
 pub struct Entry {
     pub path:     PathBuf,
-    pub name:     String,
     pub kind:     EntryKind,
     pub depth:    usize,
     pub metadata: Option<std::fs::Metadata>,
@@ -118,7 +117,7 @@ pub enum EntryKind {
 }
 ```
 
-`Entry` is the unit passed from `Source` to `Matcher` to `Results`. Populate only what your source knows — `metadata` is optional and incurs no overhead when `None`.
+`Entry` is the unit passed from `Source` to `Matcher` to `Results`. The entry name can be derived from `path.file_name()` when needed — this avoids a `String` allocation per entry. Populate only what your source knows — `metadata` is optional and incurs no overhead when `None`.
 
 ---
 
@@ -248,7 +247,6 @@ impl Source for DirSource {
             .into_iter()
             .map(|res| match res {
                 Ok(e) => Ok(Entry {
-                    name:     e.file_name().to_string_lossy().into_owned(),
                     path:     e.path().to_path_buf(),
                     kind:     EntryKind::File,
                     depth:    e.depth(),
@@ -280,7 +278,6 @@ impl Source for DbSource {
     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
         let entries = self.records.iter().map(|r| Ok(Entry {
             path:     r.into(),
-            name:     r.clone(),
             kind:     EntryKind::Other,
             depth:    0,
             metadata: None,
@@ -303,7 +300,6 @@ impl Source for IndexSource {
     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
         let entries = self.index.iter().map(|e| Ok(Entry {
             path:     e.path.clone(),
-            name:     e.name.clone(),
             kind:     EntryKind::File,
             depth:    0,
             metadata: None,
@@ -323,7 +319,10 @@ struct RegexMatcher(regex::Regex);
 
 impl Matcher for RegexMatcher {
     fn is_match(&self, entry: &Entry) -> bool {
-        self.0.is_match(&entry.name)
+        entry.path.file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| self.0.is_match(n))
+            .unwrap_or(false)
     }
 }
 
@@ -350,6 +349,6 @@ impl Matcher for StaleMatcher {
 - `DirectorySource` implements `Source` using the `ignore` crate's parallel walker
 - Custom matchers: `NameMatcher`, `ExtMatcher`, `AllMatcher`, `DirMatcher`
 - `search.rs` is a thin wrapper around `parex::search()` — ~150 lines
-- Peak throughput: **1,491,712 entries/s** on an i5-13400F at 16 threads
+- Peak throughput: **4.3M+ entries/s** on Linux at 16 threads
 
 ldx demonstrates that parex's abstraction adds zero meaningful overhead — the engine gets out of the way and lets the source and hardware do the work.
