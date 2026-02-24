@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use parex::engine::WalkConfig;
-use parex::{search, Entry, EntryKind, Matcher, ParexError, Source};
+use parex::{Entry, EntryKind, Matcher, ParexError, Source, search};
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -94,11 +94,12 @@ fn finds_matching_files() {
 
     assert_eq!(results.matches, 3, "should find 3 invoice files");
     assert_eq!(results.paths.len(), 3);
-    assert!(results.paths.iter().all(|p| p
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .contains("invoice")));
+    assert!(
+        results
+            .paths
+            .iter()
+            .all(|p| p.file_name().unwrap().to_string_lossy().contains("invoice"))
+    );
 }
 
 #[test]

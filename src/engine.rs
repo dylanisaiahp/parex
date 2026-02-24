@@ -73,10 +73,8 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
 
     for item in entries {
         // Enforce limit before processing next item
-        if let Some(lim) = limit {
-            if matches >= lim {
-                break;
-            }
+        if let Some(lim) = limit && matches >= lim {
+            break;
         }
 
         let entry = match item {
@@ -106,10 +104,8 @@ pub(crate) fn run(opts: EngineOptions) -> Results {
             paths.push(entry.path.clone());
         }
 
-        if let Some(lim) = limit {
-            if matches >= lim {
-                break;
-            }
+        if let Some(lim) = limit && matches >= lim {
+            break;
         }
     }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::engine::{run, EngineOptions, WalkConfig};
+use crate::engine::{EngineOptions, WalkConfig, run};
 use crate::error::ParexError;
 use crate::results::Results;
 use crate::traits::{Matcher, Source};

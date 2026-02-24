@@ -1,7 +1,7 @@
 [package]
 name = "parex"
 version = "0.3.0"
-edition = "2021"
+edition = "2024"
 description = "Blazing-fast parallel search engine — generic, embeddable, zero opinions"
 license = "MIT"
 repository = "https://github.com/dylanisaiahp/parex"
