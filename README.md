@@ -4,7 +4,7 @@ Blazing-fast parallel search engine — generic, embeddable, zero opinions.
 
 parex is a Rust library that owns the parallel walk engine, the trait contracts, and the error type. It does **not** own filesystem logic, output formatting, or built-in matchers — those belong to the caller.
 
-Built to power [ldx](https://github.com/dylanisaiahp/localdex) — a parallel file search CLI hitting **4.3M+ entries/s** on consumer hardware.
+Built to power [ldx](https://github.com/dylanisaiahp/localdex) — a parallel file search CLI.
 
 ---
 
@@ -35,20 +35,16 @@ Implement `Source` for whatever you want to search:
 use parex::{Source, Entry, EntryKind, ParexError};
 use parex::engine::WalkConfig;
 
-struct DirSource(std::path::PathBuf);
+struct VecSource(Vec<&'static str>);
 
-impl Source for DirSource {
+impl Source for VecSource {
     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
-        let entries = walkdir::WalkDir::new(&self.0)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .map(|e| Ok(Entry {
-                path:     e.path().to_path_buf(),
-                kind:     EntryKind::File,
-                depth:    e.depth(),
-                metadata: None,
-            }))
-            .collect::<Vec<_>>();
+        let entries = self.0.iter().map(|name| Ok(Entry {
+            path:     name.into(),
+            kind:     EntryKind::File,
+            depth:    0,
+            metadata: None,
+        })).collect::<Vec<_>>();
         Box::new(entries.into_iter())
     }
 }
@@ -58,7 +54,7 @@ Run a search:
 
 ```rust
 let results = parex::search()
-    .source(DirSource("/home/user/projects".into()))
+    .source(VecSource(vec!["invoice_jan.txt", "invoice_feb.txt", "report.txt"]))
     .matching("invoice")
     .limit(50)
     .threads(8)
@@ -73,12 +69,6 @@ println!("Found {} matches in {}ms",
 
 for path in &results.paths {
     println!("  {}", path.display());
-}
-
-for err in &results.errors {
-    if err.is_recoverable() {
-        eprintln!("⚠ skipped: {:?}", err.path());
-    }
 }
 ```
 
@@ -146,7 +136,9 @@ for err in &results.errors {
 
 parex owns the walk engine, trait contracts, error type, and builder API. It does not own filesystem logic, output formatting, or concrete matchers — those live in the tool built on top.
 
-`Source` and `Matcher` are the extension points. A company wanting to search a database, an API, or a pre-built index just implements `Source` — the engine handles threading, result collection, and early exit transparently.
+`Source` and `Matcher` are the extension points. A caller wanting to search a database, an API, or a pre-built index just implements `Source` — the engine handles threading, result collection, and early exit transparently.
+
+For filesystem traversal, [parawalk](https://github.com/dylanisaiahp/parawalk) is the recommended `Source` implementation — a minimal parallel directory walker designed to pair with parex.
 
 See [DOCS.md](DOCS.md) for the full architecture guide, custom source examples, and embedding parex in your own project.
 

@@ -1,6 +1,6 @@
 [package]
 name = "parex"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 description = "Blazing-fast parallel search engine — generic, embeddable, zero opinions"
 license = "MIT"

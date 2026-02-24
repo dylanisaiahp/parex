@@ -29,12 +29,11 @@ parex (engine)
  ├── Source trait     — produce entries from anything traversable
  ├── Matcher trait    — decide what counts as a match
  ├── SearchBuilder    — fluent API to wire everything together
- ├── engine::run()    — parallel execution, result collection, early exit
+ ├── engine::run()    — execution, result collection, early exit
  └── ParexError       — typed errors with recoverable/fatal distinction
 ```
 
 The engine owns:
-- Thread management
 - Result collection
 - Early exit on limit
 - Error collection
@@ -91,7 +90,6 @@ pub trait Matcher: Send + Sync {
 pub struct WalkConfig {
     pub threads:   usize,
     pub max_depth: Option<usize>,
-    // limit is pub(crate) — internal to the engine
 }
 ```
 
@@ -117,7 +115,7 @@ pub enum EntryKind {
 }
 ```
 
-`Entry` is the unit passed from `Source` to `Matcher` to `Results`. The entry name can be derived from `path.file_name()` when needed — this avoids a `String` allocation per entry. Populate only what your source knows — `metadata` is optional and incurs no overhead when `None`.
+`Entry` is the unit passed from `Source` to `Matcher` to `Results`. The entry name can be derived from `path.file_name()` when needed — this avoids a redundant `String` allocation per entry. Populate only what your source knows — `metadata` is optional and incurs no overhead when `None`.
 
 ---
 
@@ -166,7 +164,6 @@ pub enum ParexError {
 **Convenience constructors for third-party errors:**
 
 ```rust
-// Instead of ParexError::Source(Box::new(e))
 ParexError::source_err(e)
 ParexError::matcher_err(e)
 ```
@@ -176,9 +173,8 @@ ParexError::matcher_err(e)
 ```rust
 if err.is_recoverable() {
     // permission denied, not found, symlink loop, IO
-    // safe to collect and continue walking
+    // safe to collect and continue
 }
-
 if err.is_fatal() {
     // thread pool failure, invalid source
     // halt immediately
@@ -200,7 +196,7 @@ if let Some(path) = err.path() {
 ```rust
 pub struct Results {
     pub matches: usize,
-    pub paths:   Vec<PathBuf>,   // empty unless collect_paths(true)
+    pub paths:   Vec<PathBuf>,    // empty unless collect_paths(true)
     pub errors:  Vec<ParexError>, // empty unless collect_errors(true)
     pub stats:   ScanStats,
 }
@@ -228,38 +224,68 @@ If your caller requires ordered output, sort `results.paths` after the search co
 
 ## Building on parex
 
-parex is designed to be embedded. The `Source` and `Matcher` traits are the extension points — you bring the data, parex brings the parallelism.
+parex is designed to be embedded. The `Source` and `Matcher` traits are the extension points — you bring the data, parex brings the engine.
 
-### Filesystem Source
+### Filesystem Source (recommended: parawalk)
 
-The most common use case — walk a directory tree:
+For filesystem traversal, [parawalk](https://github.com/dylanisaiahp/parawalk) is the recommended `Source` implementation:
 
 ```rust
 use parex::{Source, Entry, EntryKind, ParexError};
 use parex::engine::WalkConfig;
+use parawalk::{EntryKind as WalkKind, EntryRef, WalkConfig as ParaConfig};
+use std::sync::mpsc;
 
-struct DirSource(std::path::PathBuf);
+struct DirectorySource(std::path::PathBuf);
 
-impl Source for DirSource {
+impl Source for DirectorySource {
     fn walk(&self, config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
-        let entries = walkdir::WalkDir::new(&self.0)
-            .max_depth(config.max_depth.unwrap_or(usize::MAX))
-            .into_iter()
-            .map(|res| match res {
-                Ok(e) => Ok(Entry {
-                    path:     e.path().to_path_buf(),
-                    kind:     EntryKind::File,
-                    depth:    e.depth(),
-                    metadata: e.metadata().ok(),
-                }),
-                Err(e) => Err(ParexError::Io {
-                    path: e.path().map(|p| p.to_path_buf()).unwrap_or_default(),
-                    source: e.into_io_error().unwrap_or_else(|| {
-                        std::io::Error::new(std::io::ErrorKind::Other, "walkdir error")
-                    }),
-                }),
-            })
-            .collect::<Vec<_>>();
+        let (tx, rx) = mpsc::channel::<Vec<Entry>>();
+        let root = self.0.clone();
+
+        std::thread::spawn(move || {
+            parawalk::walk(
+                root,
+                ParaConfig { threads: config.threads, max_depth: config.max_depth, follow_links: false },
+                None::<fn(&EntryRef<'_>) -> bool>,
+                move || {
+                    let tx = tx.clone();
+                    let mut batch = Vec::with_capacity(128);
+                    move |walked: parawalk::Entry| {
+                        let kind = match walked.kind {
+                            WalkKind::File => EntryKind::File,
+                            WalkKind::Dir => EntryKind::Dir,
+                            WalkKind::Symlink => EntryKind::Symlink,
+                            WalkKind::Other => return,
+                        };
+                        batch.push(Entry { path: walked.path, kind, depth: walked.depth, metadata: None });
+                        if batch.len() >= 128 {
+                            let _ = tx.send(std::mem::take(&mut batch));
+                            batch = Vec::with_capacity(128);
+                        }
+                    }
+                },
+            );
+        });
+
+        Box::new(rx.into_iter().flatten().map(Ok))
+    }
+}
+```
+
+### In-Memory Source
+
+```rust
+struct VecSource(Vec<String>);
+
+impl Source for VecSource {
+    fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
+        let entries = self.0.iter().map(|r| Ok(Entry {
+            path:     r.into(),
+            kind:     EntryKind::File,
+            depth:    0,
+            metadata: None,
+        })).collect::<Vec<_>>();
         Box::new(entries.into_iter())
     }
 }
@@ -267,12 +293,8 @@ impl Source for DirSource {
 
 ### Database Source
 
-Search a database by implementing `Source` over query results:
-
 ```rust
-struct DbSource {
-    records: Vec<String>,
-}
+struct DbSource { records: Vec<String> }
 
 impl Source for DbSource {
     fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
@@ -287,31 +309,7 @@ impl Source for DbSource {
 }
 ```
 
-### Pre-built Index Source
-
-If you have a pre-built index (e.g. a search index, MFT cache, or database of file paths), implement `Source` to read from it — parex handles parallel matching over your index entries exactly as it would a live filesystem walk:
-
-```rust
-struct IndexSource {
-    index: Vec<IndexEntry>, // your index type
-}
-
-impl Source for IndexSource {
-    fn walk(&self, _config: &WalkConfig) -> Box<dyn Iterator<Item = Result<Entry, ParexError>>> {
-        let entries = self.index.iter().map(|e| Ok(Entry {
-            path:     e.path.clone(),
-            kind:     EntryKind::File,
-            depth:    0,
-            metadata: None,
-        })).collect::<Vec<_>>();
-        Box::new(entries.into_iter())
-    }
-}
-```
-
 ### Custom Matchers
-
-Implement `Matcher` for any matching logic:
 
 ```rust
 // Regex matcher
@@ -346,9 +344,8 @@ impl Matcher for StaleMatcher {
 
 [ldx](https://github.com/dylanisaiahp/localdex) is a parallel file search CLI built entirely on parex.
 
-- `DirectorySource` implements `Source` using the `ignore` crate's parallel walker
+- `DirectorySource` implements `Source` using [parawalk](https://github.com/dylanisaiahp/parawalk) for parallel directory traversal
 - Custom matchers: `NameMatcher`, `ExtMatcher`, `AllMatcher`, `DirMatcher`
-- `search.rs` is a thin wrapper around `parex::search()` — ~150 lines
-- Peak throughput: **4.3M+ entries/s** on Linux at 16 threads
+- `search.rs` is a thin wrapper around `parex::search()`
 
 ldx demonstrates that parex's abstraction adds zero meaningful overhead — the engine gets out of the way and lets the source and hardware do the work.
